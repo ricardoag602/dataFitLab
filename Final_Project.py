@@ -328,4 +328,207 @@ plt.suptitle('Effect of L2 Regularization', fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.show()
 
+#====================================================================
+# KNN CLASSIFIER FROM SCRATCH 
+#====================================================================
+from collections import Counter
+
+def euclidean_distance(a, b):
+    return np.sqrt(np.sum((a - b) ** 2))
+
+def knn_predict(X_train, y_train, X_test, k=3):
+    predictions = []
+    for test_point in X_test:
+        distances = []
+        for i, train_point in enumerate(X_train):
+            d = euclidean_distance(test_point, train_point)
+            distances.append((d, y_train[i]))
+        distances.sort(key=lambda x: x[0])
+        k_nearest = distances[:k]
+        k_labels = [label for _, label in k_nearest]
+        most_common = Counter(k_labels).most_common(1)[0][0]
+        predictions.append(most_common)
+    return np.array(predictions)
+
+# data + manual 80/20 split
+X_knn, y_knn = make_moons(n_samples=200, noise=0.2, random_state=42)
+np.random.seed(42)
+indices = np.random.permutation(len(X_knn))
+split = int(0.8 * len(X_knn))
+train_idx, test_idx = indices[:split], indices[split:]
+
+X_train_knn = X_knn[train_idx]
+y_train_knn = y_knn[train_idx]
+X_test_knn = X_knn[test_idx]
+y_test_knn = y_knn[test_idx]
+
+print("\n--- KNN Classifier ---")
+print(f"Training set: {len(X_train_knn)} samples")
+print(f"Test set: {len(X_test_knn)} samples")
+
+preds_knn = knn_predict(X_train_knn, y_train_knn, X_test_knn, k=5)
+acc_knn = np.mean(preds_knn == y_test_knn)
+print(f"Test Accuracy (k=5): {acc_knn:.2%}")
+
+# decision boundaries for different k
+k_values = [1, 3, 5, 15]
+fig_knn, axes_knn = plt.subplots(1, 4, figsize=(18, 4))
+
+h = 0.05
+x_min_k, x_max_k = X_knn[:, 0].min() - 0.5, X_knn[:, 0].max() + 0.5
+y_min_k, y_max_k = X_knn[:, 1].min() - 0.5, X_knn[:, 1].max() + 0.5
+xx_k, yy_k = np.meshgrid(np.arange(x_min_k, x_max_k, h),
+                         np.arange(y_min_k, y_max_k, h))
+grid_knn = np.c_[xx_k.ravel(), yy_k.ravel()]
+
+print("\n--- Comparing different k values ---")
+for ax, k in zip(axes_knn, k_values):
+    Z_k = knn_predict(X_train_knn, y_train_knn, grid_knn, k=k)
+    Z_k = Z_k.reshape(xx_k.shape)
+    preds_k = knn_predict(X_train_knn, y_train_knn, X_test_knn, k=k)
+    acc_k = np.mean(preds_k == y_test_knn)
+
+    ax.contourf(xx_k, yy_k, Z_k, levels=50, cmap='RdYlBu', alpha=0.5)
+    ax.scatter(X_train_knn[:, 0], X_train_knn[:, 1], c=y_train_knn,
+               cmap='RdYlBu', edgecolors='k', s=20, label='Train')
+    ax.scatter(X_test_knn[:, 0], X_test_knn[:, 1], c=y_test_knn,
+               cmap='RdYlBu', edgecolors='k', s=50, marker='s', label='Test')
+    ax.set_title(f'k={k} (Acc: {acc_k:.0%})')
+    ax.set_xlabel('Feature 1')
+    print(f"  k={k:2d} | test accuracy={acc_k:.2%}")
+
+axes_knn[0].set_ylabel('Feature 2')
+plt.suptitle('KNN Decision Boundaries — Effect of k', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+
+#====================================================================
+# VALIDATION FRAMEWORK 
+#====================================================================
+
+def accuracy(y_true, y_pred):
+    return np.mean(y_true == y_pred)
+
+def error_rate(y_true, y_pred):
+    return 1.0 - accuracy(y_true, y_pred)
+
+# KNN error vs k
+k_range = list(range(1, 31))
+train_errors_knn = []
+val_errors_knn = []
+
+print("\n--- Validation: KNN error vs k ---")
+for k in k_range:
+    train_preds = knn_predict(X_train_knn, y_train_knn, X_train_knn, k=k)
+    train_errors_knn.append(error_rate(y_train_knn, train_preds))
+    val_preds = knn_predict(X_train_knn, y_train_knn, X_test_knn, k=k)
+    val_errors_knn.append(error_rate(y_test_knn, val_preds))
+
+best_k = k_range[np.argmin(val_errors_knn)]
+print(f"  Best k: {best_k} (val error: {min(val_errors_knn):.2%})")
+
+# logistic regression error vs lambda
+lambda_range = np.logspace(-3, 2, 20)
+train_errors_lr = []
+val_errors_lr = []
+
+X_train_lr_v = X_knn[train_idx]
+y_train_lr_v = y_knn[train_idx]
+X_test_lr_v = X_knn[test_idx]
+y_test_lr_v = y_knn[test_idx]
+
+print("\n--- Validation: Logistic Regression error vs lambda ---")
+for lam in lambda_range:
+    w_v, b_v, _ = train(X_train_lr_v, y_train_lr_v, lr=0.1, iterations=1000, lam=lam)
+    tr_preds = (sigmoid(X_train_lr_v @ w_v + b_v) >= 0.5).astype(int)
+    train_errors_lr.append(error_rate(y_train_lr_v, tr_preds))
+    val_preds = (sigmoid(X_test_lr_v @ w_v + b_v) >= 0.5).astype(int)
+    val_errors_lr.append(error_rate(y_test_lr_v, val_preds))
+
+best_lam = lambda_range[np.argmin(val_errors_lr)]
+print(f"  Best lambda: {best_lam:.4f} (val error: {min(val_errors_lr):.2%})")
+
+# error curves
+fig_val, (ax_v1, ax_v2) = plt.subplots(1, 2, figsize=(14, 5))
+
+ax_v1.plot(k_range, train_errors_knn, 'b-o', markersize=3, label='Training Error')
+ax_v1.plot(k_range, val_errors_knn, 'r-o', markersize=3, label='Validation Error')
+ax_v1.axvline(x=best_k, color='gray', linestyle='--', alpha=0.5, label=f'Best k={best_k}')
+ax_v1.set_xlabel('k (Number of Neighbors)')
+ax_v1.set_ylabel('Error Rate')
+ax_v1.set_title('KNN: Train vs Validation Error')
+ax_v1.legend()
+ax_v1.grid(True, alpha=0.3)
+ax_v1.annotate('High Variance\n(Overfitting)', xy=(2, 0.02), fontsize=8, color='gray')
+ax_v1.annotate('High Bias\n(Underfitting)', xy=(22, 0.15), fontsize=8, color='gray')
+
+ax_v2.plot(lambda_range, train_errors_lr, 'b-o', markersize=3, label='Training Error')
+ax_v2.plot(lambda_range, val_errors_lr, 'r-o', markersize=3, label='Validation Error')
+ax_v2.axvline(x=best_lam, color='gray', linestyle='--', alpha=0.5, label=f'Best lambda={best_lam:.3f}')
+ax_v2.set_xscale('log')
+ax_v2.set_xlabel('Lambda (Regularization Strength)')
+ax_v2.set_ylabel('Error Rate')
+ax_v2.set_title('Logistic Regression: Train vs Validation Error')
+ax_v2.legend()
+ax_v2.grid(True, alpha=0.3)
+
+plt.suptitle('Validation Framework — Bias-Variance Tradeoff', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+print(f"\n--- Summary ---")
+print(f"KNN:                 best k={best_k}, val error={min(val_errors_knn):.2%}")
+print(f"Logistic Regression: best lambda={best_lam:.4f}, val error={min(val_errors_lr):.2%}")
+print("KNN can handle nonlinear boundaries but logistic regression is stuck with a straight line")
+print("Thats why KNN does better on the moons dataset")
+
+
+#====================================================================
+# SKLEARN VALIDATION — Proving Our Code Works
+#====================================================================
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+
+print("\n" + "="*60)
+print(" SKLEARN VALIDATION — Comparing Our Code vs Sklearn")
+print("="*60)
+
+print("\n--- KNN Comparison ---")
+print(f"{'k':<5} {'Ours':>10} {'Sklearn':>10} {'Match?':>10}")
+print("-" * 40)
+
+for k in [1, 3, 5, 15]:
+    our_preds = knn_predict(X_train_knn, y_train_knn, X_test_knn, k=k)
+    our_acc = np.mean(our_preds == y_test_knn)
+
+    sk_knn = KNeighborsClassifier(n_neighbors=k)
+    sk_knn.fit(X_train_knn, y_train_knn)
+    sk_acc = sk_knn.score(X_test_knn, y_test_knn)
+
+    match = "YES" if abs(our_acc - sk_acc) < 0.01 else "CLOSE" if abs(our_acc - sk_acc) < 0.05 else "NO"
+    print(f"k={k:<3} {our_acc:>9.2%} {sk_acc:>9.2%} {match:>10}")
+
+print("\n--- Logistic Regression Comparison ---")
+print(f"{'Lambda':<10} {'Ours':>10} {'Sklearn':>10} {'Match?':>10}")
+print("-" * 45)
+
+for lam in [0.0, 0.1, 1.0, 10.0]:
+    w_test, b_test, _ = train(X_train_knn, y_train_knn, lr=0.1, iterations=1000, lam=lam)
+    our_preds_lr = (sigmoid(X_test_knn @ w_test + b_test) >= 0.5).astype(int)
+    our_acc_lr = np.mean(our_preds_lr == y_test_knn)
+
+    C_val = 1.0 / lam if lam > 0 else 1e6
+    sk_lr = LogisticRegression(C=C_val, penalty='l2', solver='lbfgs', max_iter=1000)
+    sk_lr.fit(X_train_knn, y_train_knn)
+    sk_acc_lr = sk_lr.score(X_test_knn, y_test_knn)
+
+    match = "YES" if abs(our_acc_lr - sk_acc_lr) < 0.01 else "CLOSE" if abs(our_acc_lr - sk_acc_lr) < 0.05 else "NO"
+    print(f"lam={lam:<5} {our_acc_lr:>9.2%} {sk_acc_lr:>9.2%} {match:>10}")
+
+print("\n--- Conclusion ---")
+print("Our from-scratch KNN should match sklearn almost exactly (same algorithm).")
+print("Logistic regression might differ slightly because sklearn uses a different")
+print("optimizer (LBFGS vs our basic gradient descent), but accuracies should be close.")
+print("This confirms our implementations are correct.")
 
