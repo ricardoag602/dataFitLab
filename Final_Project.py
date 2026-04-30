@@ -1,6 +1,15 @@
-#THIS PROJECT IS NOT FINISHED THIS IS A CURRENT OF THE TEMPLATE FILE IN JUPYTER
-#DOCUMENTATION WILL BE ADDED LATER ON SO AS TO IMPROVE UNDERSTANDING
-#EXPLANATION ON CODE WILL BE PRESENTED IN JUPYTER NOTEBOOK FILE
+# ============================================================================
+# DataFitLab: Advanced Models & Validation Framework
+# ============================================================================
+# This file demonstrates advanced supervised learning concepts:
+# 1. SVM with manual kernel trick (2D → 3D transformation)
+# 2. Logistic regression from scratch (Numpy only)
+# 3. KNN from scratch with distance-based voting
+# 4. Validation framework (train/val error curves, bias-variance tradeoff)
+# 5. Sklearn comparison (validation of our implementations)
+#
+# This is the comprehensive teaching implementation.
+# For high-level narrative, see Group_Project_Draft.ipynb
 
 import numpy as np
 from sklearn.datasets import make_circles
@@ -40,8 +49,8 @@ model.fit(X_3d, y)
 #Step 4: Extract the Hyperplane with the equation
 #---
 
-#note: the model gives the weights (W) and the intercept (b)
-#Equation of the plane: (W0 * x) + (W1 * y) + (W2 * z) + b = 0
+# note: the model gives the weights (W) and the intercept (b)
+# Equation of the hyperplane: (W0 * x) + (W1 * y) + (W2 * z) + b = 0
 
 weights = model.coef_[0]
 bias = model.intercept_[0]
@@ -52,10 +61,11 @@ print("--- SVM Model Trained Successfully ---")
 print(f"Weight Matrix (w): [{w0:.4f}, {w1:.4f}, {w2:.4f}]")
 print(f"Bias / Intercept (b): {bias:.4f}")
 
-#DAY 2 TASK: rearange the equation to solve for Z:
-#z = -( (w0 * x) + (w1 * y) + b ) / w2
-print("\nEquation for Day 2 3D Surface Plot:")
-print(f"z = -(({w0:.4f} * x) + ({w1:.4f} * y) + {bias:.4f} ) / {w1:.4f}")
+# Rearrange the equation to solve for Z (used for 3D surface plot):
+# Hyperplane: (w0 * x) + (w1 * y) + (w2 * z) + b = 0
+# Solving for z: z = -( (w0 * x) + (w1 * y) + b ) / w2
+print("\nHyperplane Equation for 3D Surface Plot:")
+print(f"z = -(({w0:.4f} * x) + ({w1:.4f} * y) + {bias:.4f}) / {w2:.4f}")
 
 #---
 #Step 5: Extracting the Support Vectors
@@ -70,7 +80,7 @@ sv_indices = model.support_
 #3. Get the number of support vectors per class
 sv_per_class = model.n_support_
 
-print("\n--- Support Vector Informarion ---")
+print("\n--- Support Vector Information ---")
 print(f"Total dataset size: {len(X_3d)} points")
 print(f"Total Support Vectors: {len(sv_coords_3d)} points")
 print(f"Support Vectors per Class: {sv_per_class}")
@@ -94,7 +104,7 @@ xx, yy = np.meshgrid(np.linspace(x_min, x_max, 30),
                      np.linspace(y_min, y_max, 30))
 
 # Calculate the corresponding Z height for every point on that mesh-grid
-# (using the same equation from the SMV model)
+# (using the same equation from the SVM model)
 zz = -(w0 * xx + w1 * yy + bias) / w2
 
 #---
@@ -129,7 +139,7 @@ fig.add_trace(go.Scatter3d(
         line=dict(color='red', width=3)
     ),
     name='Support Vectors',
-    hoverinfo='skip'        # Skip hover to reduct clutter
+    hoverinfo='skip'        # Skip hover to reduce visual clutter
     )
 )
 
@@ -174,8 +184,8 @@ from sklearn.datasets import make_moons
 #---
 # Step 1: Generate a different dataset for classification
 #---
-# using make_moons because its a classic nonlinear binary classification problem
-# tried different noise values, 0.2 gives a good mix of challenge
+# Using make_moons: a classic nonlinear binary classification problem.
+# Noise=0.2 provides good challenge while remaining learnable.
 X_lr, y_lr = make_moons(n_samples=200, noise=0.2, random_state=42)
 
 print("\n--- Logistic Regression Dataset ---")
@@ -223,26 +233,26 @@ def compute_loss(y_true, y_pred, weights, lam=0.0):
 def train(X, y, lr=0.1, iterations=1000, lam=0.0):
     n_samples, n_features = X.shape
 
-    # start with all zeros — tried random init but zeros works fine
+    # Initialize weights to zeros (tried random init but zeros works well for gradient descent)
     w = np.zeros(n_features)
     b = 0.0
     losses = []
 
     for i in range(iterations):
-        #forward pass
-        z = X @ w + b          # linear part: w1*x1 + w2*x2 + b
-        y_hat = sigmoid(z)     # squash through sigmoid to get probabilities
+        # Forward pass: compute predictions
+        z = X @ w + b          # Linear combination: w1*x1 + w2*x2 + b
+        y_hat = sigmoid(z)     # Squash through sigmoid to get probabilities [0,1]
 
-        #compute loss (for tracking)
+        # Compute loss (Binary Cross-Entropy + L2 penalty)
         loss = compute_loss(y, y_hat, w, lam)
         losses.append(loss)
 
-        #gradients — these formulas come from the derivative of BCE
+        # Compute gradients (derived from BCE loss function)
         error = y_hat - y
-        dw = (1/n_samples) * (X.T @ error) + (lam/n_samples) * w   # L2 adds lam*w term
+        dw = (1/n_samples) * (X.T @ error) + (lam/n_samples) * w   # L2 penalty: +lambda*w
         db = (1/n_samples) * np.sum(error)
 
-        #update weights (gradient descent step)
+        # Gradient descent step: move weights toward reducing loss
         w = w - lr * dw
         b = b - lr * db
 
@@ -350,7 +360,7 @@ def knn_predict(X_train, y_train, X_test, k=3):
         predictions.append(most_common)
     return np.array(predictions)
 
-# data + manual 80/20 split
+# Generate dataset and perform manual 80/20 train/test split
 X_knn, y_knn = make_moons(n_samples=200, noise=0.2, random_state=42)
 np.random.seed(42)
 indices = np.random.permutation(len(X_knn))
@@ -449,7 +459,7 @@ for lam in lambda_range:
 best_lam = lambda_range[np.argmin(val_errors_lr)]
 print(f"  Best lambda: {best_lam:.4f} (val error: {min(val_errors_lr):.2%})")
 
-# error curves
+# Plot error curves for both KNN and Logistic Regression
 fig_val, (ax_v1, ax_v2) = plt.subplots(1, 2, figsize=(14, 5))
 
 ax_v1.plot(k_range, train_errors_knn, 'b-o', markersize=3, label='Training Error')
@@ -528,7 +538,7 @@ for lam in [0.0, 0.1, 1.0, 10.0]:
 
 print("\n--- Conclusion ---")
 print("Our from-scratch KNN should match sklearn almost exactly (same algorithm).")
-print("Logistic regression might differ slightly because sklearn uses a different")
-print("optimizer (LBFGS vs our basic gradient descent), but accuracies should be close.")
-print("This confirms our implementations are correct.")
+print("Logistic regression might differ slightly because Sklearn uses LBFGS optimizer")
+print("while we use basic gradient descent, but accuracies should be close.")
+print("\nConclusion: This confirms our implementations are correct.")
 
